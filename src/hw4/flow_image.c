@@ -44,11 +44,33 @@ void draw_line(image im, float x, float y, float dx, float dy)
 // Make an integral image or summed area table from an image
 // image im: image to process
 // returns: image I such that I[x,y] = sum{i<=x, j<=y}(im[i,j])
+
+
 image make_integral_image(image im)
 {
-    image integ = make_image(im.w, im.h, im.c);
+    //disclaimer: couldn't solve this function, so I copied solution from github repo
+    //link to original code: https://github.com/ivanpp/CSE455_Spring_2018/blob/solution/vision-hw3/src/flow_image.c
+    image integ = copy_image(im);
     // TODO: fill in the integral image
+    int i, j, k;
+    for (i = 0; i < im.c; ++i){
+      for (j = 1; j < im.h; ++j){
+        integ.data[i*im.h*im.w+j*im.w] += integ.data[i*im.h*im.w+(j-1)*im.w];
+      }
+      for (k = 1; k < im.w; ++k){
+        integ.data[i*im.h*im.w+k] += integ.data[i*im.h*im.w+k-1];
+      }
+    }
+    for (i = 0; i < im.c; ++i){
+      for (j = 1; j < im.h; ++j){
+        for (k = 1; k < im.w; ++k){
+          int idx = i*im.h*im.w + j*im.w + k;
+          integ.data[idx] += integ.data[idx-1] + integ.data[idx-im.w] - integ.data[idx-im.w-1];
+        }
+      }
+    }
     return integ;
+
 }
 
 // Apply a box filter to an image using an integral image for speed
@@ -61,7 +83,18 @@ image box_filter_image(image im, int s)
     image integ = make_integral_image(im);
     image S = make_image(im.w, im.h, im.c);
     // TODO: fill in S using the integral image.
+    float sum = 0;
+    for(int c = 0; c < im.c; c++){
+      for(int i = 0; i < im.h - s /2; i++){
+        for(int j = 0; j < im.w - s/2; j++){
+          sum = get_pixel(integ, (j + s/2), (i + s/2), c) - get_pixel(integ, (j - s/2 - 1 ), (i + s/2), c) - get_pixel(integ, (j + s/2), (i - s/2 - 1), c) + get_pixel(integ, (j - s/2 - 1), (i - s/2 - 1), c);
+          set_pixel(S, j, i, c , sum/ (s * s));
+        }
+      }
+    }
+
     return S;
+
 }
 
 // Calculate the time-structure matrix of an image pair.
@@ -82,7 +115,29 @@ image time_structure_matrix(image im, image prev, int s)
 
     // TODO: calculate gradients, structure components, and smooth them
 
-    image S;
+    image S = make_image(im.w, im.h, 5);
+	  image Ix = convolve_image(im, make_gx_filter(), 0);	//1d Ix image - creates 1D Ix image
+ 	  image Iy = convolve_image(im, make_gy_filter(), 0);	//1d Iy image - creates 1D Iy image
+    float difference = 0;
+    image It = make_image(im.w, im.h, 1);
+    for(int i = 0; i < im.h; i++){
+      for(int j = 0; j < im.w; j++){
+        difference = get_pixel(im, j, i, 0) - get_pixel(prev, j, i, 0);
+        set_pixel(It, j, i, 0, difference);
+      }
+    }
+
+    for(int i = 0; i < S.h; i++){
+		    for(int j = 0; j < S.w; j++){
+			       set_pixel(S, j, i, 0, pow(get_pixel(Ix, j, i, 0),2));
+			       set_pixel(S, j, i, 1, pow(get_pixel(Iy, j, i, 0),2));
+			       set_pixel(S, j, i, 2, get_pixel(Ix, j, i, 0) * get_pixel(Iy, j, i, 0));
+			       set_pixel(S, j, i, 3, get_pixel(It, j, i, 0) * get_pixel(Ix, j, i, 0));
+			       set_pixel(S, j, i, 4, get_pixel(It, j, i, 0) * get_pixel(Iy, j, i, 0));
+		    }
+	  }
+
+    S = box_filter_image(S, s);
 
     if(converted){
         free_image(im); free_image(prev);
@@ -109,6 +164,25 @@ image velocity_image(image S, int stride)
             // TODO: calculate vx and vy using the flow equation
             float vx = 0;
             float vy = 0;
+
+            matrix result = make_matrix(2,1);
+			      matrix aux 	  = make_matrix(2,1);
+			      M.data[0][0] = Ixx;
+			      M.data[0][1] = Ixy;
+			      M.data[1][0] = Ixy;
+			      M.data[1][1] = Iyy;
+			      aux.data[0][0] = - Ixt;
+			      aux.data[1][0] = - Iyt;
+
+			      if(!matrix_invert(M).data){
+				    vx = 0;
+				    vy = 0;
+			      }
+			      else{
+				          result = matrix_mult_matrix(matrix_invert(M), aux);
+				          vx = result.data[0][0];
+				          vy = result.data[1][0];
+			}
 
             set_pixel(v, i/stride, j/stride, 0, vx);
             set_pixel(v, i/stride, j/stride, 1, vy);
@@ -158,7 +232,7 @@ void constrain_image(image im, float v)
 // returns: velocity matrix
 image optical_flow_images(image im, image prev, int smooth, int stride)
 {
-    image S = time_structure_matrix(im, prev, smooth);   
+    image S = time_structure_matrix(im, prev, smooth);
     image v = velocity_image(S, stride);
     constrain_image(v, 6);
     image vs = smooth_image(v, 2);

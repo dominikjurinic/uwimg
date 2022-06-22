@@ -13,20 +13,25 @@ void activate_matrix(matrix m, ACTIVATION a)
     for(i = 0; i < m.rows; ++i){
         double sum = 0;
         for(j = 0; j < m.cols; ++j){
+
             double x = m.data[i][j];
             if(a == LOGISTIC){
-                // TODO
+                m.data[i][j] = 1./(1. + exp(-x));
             } else if (a == RELU){
-                // TODO
+                //if(m.data[i][j] < 0){m.data[i][j] = 0.;}
+                m.data[i][j] = MAX(0, x);
             } else if (a == LRELU){
-                // TODO
+                if(m.data[i][j] <= 0.){m.data[i][j] = 0.1 * x;}
             } else if (a == SOFTMAX){
-                // TODO
+                m.data[i][j] = exp(x);
             }
             sum += m.data[i][j];
         }
         if (a == SOFTMAX) {
             // TODO: have to normalize by sum if we are using SOFTMAX
+            for(int k = 0; k < m.cols; ++k){
+				          m.data[i][k] /= sum;
+			            }
         }
     }
 }
@@ -43,6 +48,17 @@ void gradient_matrix(matrix m, ACTIVATION a, matrix d)
         for(j = 0; j < m.cols; ++j){
             double x = m.data[i][j];
             // TODO: multiply the correct element of d by the gradient
+            if(a == LOGISTIC){
+              d.data[i][j] *= x * (1 - x);
+            }
+            else if(a == RELU){
+              if(x > 0){d.data[i][j] *= 1;}
+              else{d.data[i][j] *= 0;}
+            }
+            else if(a == LRELU){
+              if(x > 0){d.data[i][j] *= 1;}
+              else{d.data[i][j] *= 0.1;}
+            }
         }
     }
 }
@@ -58,7 +74,10 @@ matrix forward_layer(layer *l, matrix in)
 
 
     // TODO: fix this! multiply input by weights and apply activation function.
-    matrix out = make_matrix(in.rows, l->w.cols);
+    //matrix out = make_matrix(in.rows, l->w.cols);
+
+    matrix out = matrix_mult_matrix(in, l->w);
+    activate_matrix(out, l->activation);
 
 
     free_matrix(l->out);// free the old output
@@ -75,15 +94,18 @@ matrix backward_layer(layer *l, matrix delta)
     // 1.4.1
     // delta is dL/dy
     // TODO: modify it in place to be dL/d(xw)
+    gradient_matrix(l->out, l->activation, delta);
+    //matrix_mult_matrix(delta, l->out);
 
 
     // 1.4.2
     // TODO: then calculate dL/dw and save it in l->dw
     free_matrix(l->dw);
-    matrix dw = make_matrix(l->w.rows, l->w.cols); // replace this
+    //matrix dw = make_matrix(l->w.rows, l->w.cols); // replace this
+    matrix dw = matrix_mult_matrix(transpose_matrix(l->in), delta);
     l->dw = dw;
 
-    
+
     // 1.4.3
     // TODO: finally, calculate dL/dx and return it.
     matrix dx = make_matrix(l->in.rows, l->in.cols); // replace this
@@ -102,11 +124,18 @@ void update_layer(layer *l, double rate, double momentum, double decay)
     // Calculate Δw_t = dL/dw_t - λw_t + mΔw_{t-1}
     // save it to l->v
 
+    matrix aux = axpy_matrix(-decay, l->w, l->dw);
+    matrix dwt = axpy_matrix(momentum, l->v, aux);
+    free_matrix(l->v);
+    l->v = dwt;
 
     // Update l->w
-
+    matrix w_t1 = axpy_matrix(rate, dwt, l->w);
+    free_matrix(l->w);
+    l->w = w_t1;
 
     // Remember to free any intermediate results to avoid memory leaks
+    free_matrix(aux);
 
 }
 
@@ -242,7 +271,7 @@ void train_model(model m, data d, int batch, int iters, double rate, double mome
 }
 
 
-// Questions 
+// Questions
 //
 // 5.2.2.1 Why might we be interested in both training accuracy and testing accuracy? What do these two numbers tell us about our current model?
 // TODO
@@ -268,6 +297,3 @@ void train_model(model m, data d, int batch, int iters, double rate, double mome
 // 5.3.2.1 How well does your network perform on the CIFAR dataset?
 // TODO
 //
-
-
-
