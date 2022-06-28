@@ -10,4 +10,6 @@ To get started, make sure you have `git`, a C compiler, and `make` installed. Th
 
 and check to see that everything compiles correctly. Then, to get started, open up the `README` for homework 0 in `src/hw0/README.md`, or view it [here](./src/hw0/README.md). Good luck and have fun!
 
-    Lecture playlist can be seen: https://www.youtube.com/watch?v=8jXIAWg_yHU&list=PLjMXczUzEYcHvw5YYSU92WrY8IwhTuq7p
+Lecture playlist can be seen at the following link:
+
+    https://www.youtube.com/watch?v=8jXIAWg_yHU&list=PLjMXczUzEYcHvw5YYSU92WrY8IwhTuq7p
